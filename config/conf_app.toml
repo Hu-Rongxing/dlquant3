@@ -1,0 +1,20 @@
+# config/conf_app.toml
+
+# 日志系统
+[logging]
+log_level = "DEBUG"
+log_dir = "logger/logs"
+log_file = "applog.log"
+
+# 单元测试用
+[testtoml]
+TEST_SETTING = 'test_toml_settings'
+
+# 迅投客户端
+[xt_client]
+program_dir = "C:/e_trader/bin.x64/XtItClient.exe"
+xt_data_dir = "C:/e_trader/userdata_mini"
+xt_login_button_png = "config/assets/xt_login_button.PNG"  # 登录按钮图片
+auto_login = false   # 客户端是否选择了自动登录
+
+
