@@ -59,7 +59,7 @@ class MyXtQuantTraderCallback(XtQuantTraderCallback):
         :param position: XtPosition对象
         :return:
         """
-        app_logger.logger(
+        app_logger.applogger(
             f"交易回调信息【持仓变动】: 证券代码:{position.stock_code};持仓数量:{position.volume}; 可用数量:{position.can_use_volume}; 冻结数量:{position.frozen_volume}; 成本价格：:{position.avg_price}"
         )
 

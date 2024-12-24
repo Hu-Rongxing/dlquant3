@@ -18,3 +18,4 @@ xt_login_button_png = "config/assets/xt_login_button.PNG"  # 登录按钮图片
 auto_login = false   # 客户端是否选择了自动登录
 
 
+
