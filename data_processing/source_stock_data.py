@@ -228,6 +228,7 @@ def get_data_from_local(
         incrementally: bool = False,
         columns_mapping: Optional[Dict[str, str]] = None,
         max_workers: int = 10,
+        count = -1
 ) -> pd.DataFrame:
     """
     增强版本地数据获取函数
@@ -263,7 +264,7 @@ def get_data_from_local(
             period=period,
             start_time=start_time or '20160101',
             end_time=end_time or datetime.now().strftime('%Y%m%d'),
-            count=-1,
+            count=count,
             dividend_type='front',
             fill_data=True
         )

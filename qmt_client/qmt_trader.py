@@ -254,6 +254,7 @@ def buy_stock_async(stocks: List[str], strategy_name: str = '', order_remark: st
                 )
         except Exception as e:
             applogger.error(f"下单时发生错误：{e}")
+            return False
 
     return True
 

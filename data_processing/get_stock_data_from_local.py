@@ -75,20 +75,21 @@ class DataProcessor:
 
     @classmethod
     @lru_cache(maxsize=128)  # 优化4：增加缓存大小
-    def process_dataframe(cls) -> Tuple[pd.DataFrame, pd.Series]:
+    def process_dataframe(cls, count=-1) -> Tuple[pd.DataFrame, pd.Series]:
         """
         优化5：增加性能监控和更详细的错误处理
         """
         start_time = time.time()
         try:
             # 获取数据
-            dataframe = get_data_from_local()
+            dataframe = get_data_from_local(count=count)
 
             # 数据清洗
             dataframe = cls.clean_dataframe(dataframe)
 
             # 优化：使用更高效的时间序列映射
             timeseries = dataframe['date'].drop_duplicates().sort_values()
+            timeseries.reset_index(drop=True, inplace=True)
             date_to_int_series = pd.Series(timeseries.index, index=timeseries)
             # int_to_date_series = timeseries.reset_index(drop=True)
 
@@ -114,13 +115,14 @@ class DataProcessor:
     def generate_wide_dataframe(
             cls,
             include_index: bool = True,
-            index_stocks: List[str] = None
+            index_stocks: List[str] = None,
+            count=-1
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series]:
         """
         优化6：提高数据转换的健壮性
         """
         # 处理数据
-        data_cleaned, date_to_int_series = cls.process_dataframe()
+        data_cleaned, date_to_int_series = cls.process_dataframe(count=count)
 
         # 创建目标变量数据框
         target_df = data_cleaned.pivot_table(
@@ -144,7 +146,7 @@ class DataProcessor:
         # 添加指数数据
         if include_index:
             index_stocks = index_stocks or cls.INDEX_STOCKS
-            index_data = get_data_from_local(stock_list=index_stocks)
+            index_data = get_data_from_local(stock_list=index_stocks, count=count)
             index_data['time_seq'] = index_data['time'].map(date_to_int_series)
 
             index_data_pivot = index_data.pivot_table(

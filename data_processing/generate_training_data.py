@@ -93,8 +93,9 @@ class TimeSeriesProcessor:
                 if file_path.exists():
                     with open(file_path, 'rb') as f:
                         return pickle.load(f)
-
-            logger.warning(f"未找到缩放器文件: {file_path}")
+                else:
+                    logger.warning(f"未找到缩放器文件: {file_path}")
+                    raise Exception(f"文件{file_path}不存在")
             return None
 
         except Exception as e:
@@ -205,8 +206,11 @@ class TimeSeriesProcessor:
             train_date_end = test_length + train_length
 
             # 生成目标变量和协变量
-            # TODO: 如果是预测模式，只需要读取最近的数据。
-            target_df, covariate_df, date_to_int_series = DataProcessor.generate_wide_dataframe()
+            if mode == 'predicting':
+                count = 250
+            else:
+                count = -1
+            target_df, covariate_df, date_to_int_series = DataProcessor.generate_wide_dataframe(count=count)
             logger.info(f"目标变量形状: {target_df.shape}")
             logger.info(f"协变量形状: {covariate_df.shape}")
 

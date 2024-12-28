@@ -33,7 +33,7 @@ class MyXtQuantTraderCallback(XtQuantTraderCallback):
         :return:
         """
         app_logger.info(f"正在执行交易: {order.stock_code}, {order.order_status}, {order.order_sysid}")
-        # TODO: 执行交易日志。
+
 
     def on_stock_asset(self, asset):
         """
