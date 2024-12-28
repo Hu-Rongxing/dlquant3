@@ -83,8 +83,10 @@ class StockDataSyncManager:
             if force_full_sync:
                 start_time = '20160101'  # 全量同步从最早时间开始
                 incrementally = False
+                logger.info(f"强制全量同步更新，开始日期：{start_time}")
             else:
                 last_sync_date = self.get_last_sync_date(table_name)
+                logger.info(f"增量同步更新，开始日期：{last_sync_date}")
 
                 if last_sync_date:
                     # 转换为日期并计算同步起始日期
@@ -166,6 +168,7 @@ class StockDataSyncManager:
 
 
 def sync_stock_data_main(force_full_sync=False):
+
     try:
         # 创建同步管理器
         sync_manager = StockDataSyncManager()

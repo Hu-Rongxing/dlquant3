@@ -1,3 +1,10 @@
 # 交易策略
 [strategy]
-max_positions = 3 # 持仓数量的上限
+max_positions = 4 # 持仓数量的上限
+
+[data]
+test_data_length = 45
+train_data_length = 45
+Initial_buffer_data = 120
+train_scaler_dir = "config/assets/scalers/"
+#covariate_scaler_file = "config/assets/scalers/covariate_data_scaler.pkl"

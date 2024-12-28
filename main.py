@@ -277,6 +277,8 @@ if __name__ == '__main__':
     # 设置多进程启动方法（Windows兼容）
     # 更新日期
     update_calendar()
+    # 切换输入法
+    change_language()
 
     if sys.platform == 'win32':
         multiprocessing.freeze_support()

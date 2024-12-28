@@ -8,13 +8,9 @@ def get_investment_target() -> pd.DataFrame:
         SELECT * FROM investment_target   
         WHERE status=true  
         """
-    pg_pool = PGConnectionPool()
+    engine = create_sqlalchemy_engine()
+    df = pd.read_sql_query(query, engine)
 
-    with pg_pool.connection() as conn:
-        df = pd.read_sql_query(
-            query,
-            conn
-        )
     return df
 
 

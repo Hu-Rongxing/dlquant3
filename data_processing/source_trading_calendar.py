@@ -1,4 +1,5 @@
 import pandas_market_calendars as mcal
+import pandas as pd
 from sqlalchemy import Column, Date, Integer, String, Boolean, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -8,6 +9,7 @@ from typing import List, Optional, Dict
 
 # 导入你的数据库配置
 from utils.database import create_sqlalchemy_engine
+from utils.date_utils import convert_to_date
 
 # 创建 SQLAlchemy 基类和引擎
 Base = declarative_base()
@@ -16,7 +18,6 @@ SessionLocal = sessionmaker(bind=engine)
 
 from logger import log_manager
 logger = log_manager.get_logger(__name__)
-
 
 # 扩展交易日模型
 class TradingDay(Base):
@@ -48,16 +49,18 @@ class ChineseMarketCalendar:
         self.start_year = start_year
         self.end_year = end_year or datetime.datetime.now().year
 
+    def _convert_to_date(self, date) -> datetime.date:
+        """转换输入为日期格式"""
+        if not isinstance(date, datetime.date):
+            try:
+                date = convert_to_date(date)
+            except Exception as e:
+                logger.error(f"日期转换失败: {e}")
+                raise
+        return date
+
     def _get_date_metadata(self, date: datetime.date) -> Dict:
-        """
-        获取日期的元数据
-
-        Args:
-            date (datetime.date): 日期
-
-        Returns:
-            Dict: 日期元数据
-        """
+        """获取日期的元数据"""
         return {
             'trade_date': date,
             'year': date.year,
@@ -74,15 +77,7 @@ class ChineseMarketCalendar:
         }
 
     def _get_season(self, date: datetime.date) -> str:
-        """
-        获取季节
-
-        Args:
-            date (datetime.date): 日期
-
-        Returns:
-            str: 季节名称
-        """
+        """获取季节"""
         month = date.month
         if month in [3, 4, 5]:
             return '春季'
@@ -94,96 +89,51 @@ class ChineseMarketCalendar:
             return '冬季'
 
     def get_trading_days(self) -> List[Dict]:
-        """
-        获取中国股市交易日历，包含元数据
-
-        Returns:
-            List[Dict]: 交易日列表，包含元数据
-        """
+        """获取中国股市交易日历，包含元数据"""
         try:
-            # 使用上海证券交易所交易日历
             sse = mcal.get_calendar('XSHG')
-
-            # 生成日期范围
             start_date = f'{self.start_year}-01-01'
             end_date = f'{self.end_year}-12-31'
-
-            # 获取交易日历
             trading_days = sse.schedule(start_date=start_date, end_date=end_date)
 
-            # 转换为包含元数据的列表
             return [
                 {**self._get_date_metadata(date.date()), 'is_trading_day': True}
                 for date in trading_days.index
             ]
 
         except Exception as e:
-            print(f"获取交易日历失败: {e}")
+            logger.error(f"获取交易日历失败: {e}")
             return []
 
     def generate_full_calendar(self) -> List[Dict]:
-        """
-        生成完整的日历，包括非交易日
-
-        Returns:
-            List[Dict]: 完整日历列表
-        """
+        """生成完整的日历，包括非交易日"""
         full_calendar = []
-
-        # 生成日期范围
         start_date = datetime.date(self.start_year, 1, 1)
         end_date = datetime.date(self.end_year, 12, 31)
+        trading_days = {day['trade_date'] for day in self.get_trading_days()}
 
-        # 获取交易日
-        trading_days = {
-            day['trade_date'] for day in self.get_trading_days()
-        }
-
-        # 生成所有日期
         current_date = start_date
         while current_date <= end_date:
             date_metadata = self._get_date_metadata(current_date)
             date_metadata['is_trading_day'] = current_date in trading_days
             full_calendar.append(date_metadata)
-
             current_date += datetime.timedelta(days=1)
 
         return full_calendar
 
     def is_trading_day(self, check_date: Optional[datetime.date] = None) -> bool:
-        """
-        判断指定日期是否为交易日
+        """判断指定日期是否为交易日"""
+        check_date = self._convert_to_date(check_date or datetime.date.today())
 
-        Args:
-            check_date (datetime.date, optional): 要检查的日期，默认为今天
-
-        Returns:
-            bool: 是否为交易日
-        """
-        # 如果没有传入日期，使用今天的日期
-        if check_date is None:
-            check_date = datetime.date.today()
-
-            # 创建数据库会话
-        session = SessionLocal()
-
-        try:
-            # 查询指定日期是否为交易日
+        with SessionLocal() as session:
             result = session.execute(
                 text("SELECT is_trading_day FROM trading_days WHERE trade_date = :date"),
                 {"date": check_date}
             ).scalar()
 
-            # 如果找不到记录，尝试获取交易日历并更新数据库
             if result is None:
                 logger.info(f"未找到 {check_date} 的交易日信息，尝试更新")
-
-                # 更新当前年份的交易日历
-                self.start_year = check_date.year
-                self.end_year = check_date.year
                 self.save_to_database(calendar_type='full', years_to_update=[check_date.year])
-
-                # 重新查询
                 result = session.execute(
                     text("SELECT is_trading_day FROM trading_days WHERE trade_date = :date"),
                     {"date": check_date}
@@ -191,159 +141,44 @@ class ChineseMarketCalendar:
 
             return result if result is not None else False
 
-        except Exception as e:
-            logger.error(f"检查交易日失败: {e}")
-            return False
+    def _get_trading_day(self, reference_date: datetime.date, direction: str) -> Optional[datetime.date]:
+        """获取指定日期的最近交易日"""
+        with SessionLocal() as session:
+            operator = '<' if direction == 'previous' else '>'
+            result = session.execute(
+                text(f"""  
+                SELECT trade_date  
+                FROM trading_days  
+                WHERE is_trading_day = true AND trade_date {operator} :ref_date  
+                ORDER BY trade_date { 'DESC' if direction == 'previous' else 'ASC' }  
+                LIMIT 1  
+                """),
+                {"ref_date": reference_date}
+            ).scalar()
 
-        finally:
-            session.close()
+            return result
 
     def get_last_trading_day(self, reference_date: Optional[datetime.date] = None) -> Optional[datetime.date]:
-        """
-        获取指定日期之前最近的一个交易日
-
-        Args:
-            reference_date (datetime.date, optional): 参考日期，默认为今天
-
-        Returns:
-            Optional[datetime.date]: 最近的交易日，如果查找失败返回 None
-        """
-        # 如果没有传入日期，使用今天的日期
-        if reference_date is None:
-            reference_date = datetime.date.today()
-
-        session = SessionLocal()
-
-        try:
-            # 查询参考日期之前最近的交易日
-            result = session.execute(
-                text("""  
-                SELECT trade_date   
-                FROM trading_days   
-                WHERE is_trading_day = true AND trade_date <= :ref_date   
-                ORDER BY trade_date DESC   
-                LIMIT 1  
-                """),
-                {"ref_date": reference_date}
-            ).scalar()
-
-            return result
-
-        except Exception as e:
-            logger.error(f"获取最近交易日失败: {e}")
-            return None
-
-        finally:
-            session.close()
+        """获取指定日期之前最近的一个交易日"""
+        reference_date = self._convert_to_date(reference_date or datetime.date.today())
+        return self._get_trading_day(reference_date, 'previous')
 
     def get_next_trading_day(self, reference_date: Optional[datetime.date] = None) -> Optional[datetime.date]:
-        """
-        获取指定日期之后最近的一个交易日
+        """获取指定日期之后最近的一个交易日"""
+        reference_date = self._convert_to_date(reference_date or datetime.date.today())
+        return self._get_trading_day(reference_date, 'next')
 
-        Args:
-            reference_date (datetime.date, optional): 参考日期，默认为今天
+    def get_trading_days_range(self, start_date: Optional[datetime.date] = None, end_date: Optional[datetime.date] = None) -> List[datetime.date]:
+        """获取指定日期范围内的所有交易日"""
+        start_date = self._convert_to_date(start_date or datetime.date(datetime.date.today().year, 1, 1))
+        end_date = self._convert_to_date(end_date or datetime.date(datetime.date.today().year, 12, 31))
 
-        Returns:
-            Optional[datetime.date]: 最近的交易日，如果查找失败返回 None
-        """
-        # 如果没有传入日期，使用今天的日期
-        if reference_date is None:
-            reference_date = datetime.date.today()
-
-        session = SessionLocal()
-
-        try:
-            # 查询参考日期之后最近的交易日
+        with SessionLocal() as session:
             result = session.execute(
                 text("""  
-                SELECT trade_date   
-                FROM trading_days   
-                WHERE is_trading_day = true AND trade_date > :ref_date   
-                ORDER BY trade_date ASC   
-                LIMIT 1  
-                """),
-                {"ref_date": reference_date}
-            ).scalar()
-
-            return result
-
-        except Exception as e:
-            logger.error(f"获取下一个交易日失败: {e}")
-            return None
-
-        finally:
-            session.close()
-
-    def get_previous_trading_day(self, reference_date: Optional[datetime.date] = None) -> Optional[datetime.date]:
-        """
-        获取指定日期之前的上一个交易日
-
-        Args:
-            reference_date (datetime.date, optional): 参考日期，默认为今天
-
-        Returns:
-            Optional[datetime.date]: 上一个交易日，如果查找失败返回 None
-        """
-        # 如果没有传入日期，使用今天的日期
-        if reference_date is None:
-            reference_date = datetime.date.today()
-
-        session = SessionLocal()
-
-        try:
-            # 查询参考日期之前的上一个交易日（严格小于参考日期）
-            result = session.execute(
-                text("""  
-                SELECT trade_date   
-                FROM trading_days   
-                WHERE is_trading_day = true AND trade_date < :ref_date   
-                ORDER BY trade_date DESC   
-                LIMIT 1  
-                """),
-                {"ref_date": reference_date}
-            ).scalar()
-
-            return result
-
-        except Exception as e:
-            logger.error(f"获取上一个交易日失败: {e}")
-            return None
-
-        finally:
-            session.close()
-
-    def get_trading_days_range(
-            self,
-            start_date: Optional[datetime.date] = None,
-            end_date: Optional[datetime.date] = None
-    ) -> List[datetime.date]:
-        """
-        获取指定日期范围内的所有交易日
-
-        Args:
-            start_date (datetime.date, optional): 开始日期，默认为今年第一天
-            end_date (datetime.date, optional): 结束日期，默认为今年最后一天
-
-        Returns:
-            List[datetime.date]: 交易日列表
-        """
-        # 如果没有传入开始日期，使用今年第一天
-        if start_date is None:
-            start_date = datetime.date(datetime.date.today().year, 1, 1)
-
-            # 如果没有传入结束日期，使用今年最后一天
-        if end_date is None:
-            end_date = datetime.date(datetime.date.today().year, 12, 31)
-
-        session = SessionLocal()
-
-        try:
-            # 查询指定日期范围内的所有交易日
-            result = session.execute(
-                text("""  
-                SELECT trade_date   
-                FROM trading_days   
-                WHERE is_trading_day = true   
+                SELECT trade_date  
+                FROM trading_days  
+                WHERE is_trading_day = true  
                   AND trade_date BETWEEN :start_date AND :end_date  
                 ORDER BY trade_date  
                 """),
@@ -355,45 +190,17 @@ class ChineseMarketCalendar:
 
             return list(result)
 
-        except Exception as e:
-            logger.error(f"获取交易日范围失败: {e}")
-            return []
+    def get_trading_days_count(self, start_date: Optional[datetime.date] = None, end_date: Optional[datetime.date] = None) -> int:
+        """获取指定日期范围内的交易日数量"""
+        start_date = self._convert_to_date(start_date or datetime.date(datetime.date.today().year, 1, 1))
+        end_date = self._convert_to_date(end_date or datetime.date(datetime.date.today().year, 12, 31))
 
-        finally:
-            session.close()
-
-    def get_trading_days_count(
-            self,
-            start_date: Optional[datetime.date] = None,
-            end_date: Optional[datetime.date] = None
-    ) -> int:
-        """
-        获取指定日期范围内的交易日数量
-
-        Args:
-            start_date (datetime.date, optional): 开始日期，默认为今年第一天
-            end_date (datetime.date, optional): 结束日期，默认为今年最后一天
-
-        Returns:
-            int: 交易日数量
-        """
-        # 如果没有传入开始日期，使用今年第一天
-        if start_date is None:
-            start_date = datetime.date(datetime.date.today().year, 1, 1)
-
-            # 如果没有传入结束日期，使用今年最后一天
-        if end_date is None:
-            end_date = datetime.date(datetime.date.today().year, 12, 31)
-
-        session = SessionLocal()
-
-        try:
-            # 查询指定日期范围内的交易日数量
+        with SessionLocal() as session:
             result = session.execute(
                 text("""  
-                SELECT COUNT(*)   
-                FROM trading_days   
-                WHERE is_trading_day = true   
+                SELECT COUNT(*)  
+                FROM trading_days  
+                WHERE is_trading_day = true  
                   AND trade_date BETWEEN :start_date AND :end_date  
                 """),
                 {
@@ -404,46 +211,38 @@ class ChineseMarketCalendar:
 
             return result or 0
 
-        except Exception as e:
-            logger.error(f"获取交易日数量失败: {e}")
-            return 0
+    def save_to_database(self, calendar_type: str = 'trading', years_to_update: Optional[List[int]] = None):
+        """将日历保存到数据库"""
+        def validate_year(year: int) -> bool:
+            """验证年份是否在合理范围内"""
+            return 1990 <= year <= 3000
 
-        finally:
-            session.close()
-
-
-    def save_to_database(self,
-                         calendar_type: str = 'trading',
-                         years_to_update: Optional[List[int]] = None):
-        """
-        将日历保存到数据库
-
-        Args:
-            calendar_type (str): 日历类型 ('trading' 或 'full')
-            years_to_update (List[int], optional): 要更新的年份列表
-        """
-        # 创建数据库会话
-        session = SessionLocal()
-
-        try:
-            # 确定年份
+        with SessionLocal() as session:
             if years_to_update is None:
                 years_to_update = [datetime.datetime.now().year]
 
-            # 存储的日历数据
-            calendar_data = []
+            valid_years = [year for year in years_to_update if validate_year(year)]
+            if not valid_years:
+                logger.warning(f"提供的年份列表 {years_to_update} 无效")
+                return
 
-            # 根据类型生成日历
-            for year in years_to_update:
+            invalid_years = set(years_to_update) - set(valid_years)
+            if invalid_years:
+                logger.warning(f"以下年份被过滤: {invalid_years}")
+
+            calendar_data = []
+            for year in valid_years:
                 self.start_year = year
                 self.end_year = year
-
                 calendar_data.extend(
                     self.get_trading_days() if calendar_type == 'trading'
                     else self.generate_full_calendar()
                 )
 
-            # 使用 PostgreSQL 的 upsert 方法
+            if not calendar_data:
+                logger.warning("没有生成任何日历数据")
+                return
+
             stmt = insert(TradingDay).values(calendar_data)
             stmt = stmt.on_conflict_do_update(
                 index_elements=['trade_date'],
@@ -462,38 +261,23 @@ class ChineseMarketCalendar:
                 }
             )
 
-            # 执行插入
             result = session.execute(stmt)
             session.commit()
-
             logger.info(f"成功插入/更新 {result.rowcount} 个日期")
 
-        except Exception as e:
-            session.rollback()
-            logger.info(f"插入日期失败: {e}")
-
-        finally:
-            session.close()
-
     def analyze_calendar(self):
-        """
-        分析日历统计信息
-        """
-        session = SessionLocal()
-
-        try:
-            # 交易日统计
+        """分析日历统计信息"""
+        with SessionLocal() as session:
             trading_days_count = session.execute(
                 text("SELECT COUNT(*) FROM trading_days WHERE is_trading_day = true")
             ).scalar()
 
-            # 按年份统计交易日
             yearly_trading_days = session.execute(
                 text("""  
-                SELECT year, COUNT(*) as trading_days   
-                FROM trading_days   
-                WHERE is_trading_day = true   
-                GROUP BY year   
+                SELECT year, COUNT(*) as trading_days  
+                FROM trading_days  
+                WHERE is_trading_day = true  
+                GROUP BY year  
                 ORDER BY year  
                 """)
             ).fetchall()
@@ -502,29 +286,37 @@ class ChineseMarketCalendar:
             logger.info(f"总交易日数: {trading_days_count}")
             logger.info("\n年度交易日数:")
             for year, days in yearly_trading_days:
-                print(f"{year}年: {days}天")
-
-        except Exception as e:
-            logger.info(f"分析失败: {e}")
-
-        finally:
-            session.close()
+                logger.info(f"{year}年: {days}天")
 
     def save_full_calendar(self, start_year: int = 1991, end_year: int = 2025):
-        """
-        保存完整的日历到数据库
-
-        Args:
-            start_year (int): 开始年份
-            end_year (int): 结束年份
-        """
-        # 设置年份范围
+        """保存完整的日历到数据库"""
         self.start_year = start_year
         self.end_year = end_year
-
-        # 生成并保存完整日历
         self.save_to_database(calendar_type='full')
         logger.info(f"已保存 {start_year}-{end_year} 的完整日历")
+
+
+    def get_trading_calendar(self) -> Optional[pd.DataFrame]:
+        """获取最近的交易日并返回为 DataFrame"""
+        try:
+            with SessionLocal() as session:
+                # 使用 pd.read_sql 直接读取 SQL 查询结果到 DataFrame
+                df = pd.read_sql(
+                    """  
+                    SELECT trade_date  
+                    FROM trading_days  
+                    WHERE is_trading_day = true  
+                    ORDER BY trade_date ASC 
+                    """,
+                    con=session.bind  # 使用当前会话的数据库连接
+                )
+
+                # 处理 None 的情况
+                return df if not df.empty else None
+
+        except Exception as e:
+            logger.error(f"获取交易日历失败: {e}")
+            return None  # 在发生异常时返回 None
 
 
 def main():
@@ -537,33 +329,33 @@ def main():
     # 写入完整日历
     for i in range(1991, 2030):
         logger.info(f"正在写入完整日历：{i}年")
-        calendar.save_to_database(calendar_type='trading',years_to_update=[i])
+        calendar.save_to_database(calendar_type='trading', years_to_update=[i])
 
     # 分析日历
     calendar.analyze_calendar()
 
 
 def update_calendar(calendar_type='full'):
-    """
-    更新当年和下一年的交易日。
-    :return:
-    """
+    """更新当年和下一年的交易日"""
     year = int(datetime.datetime.now().year)
     calendar = ChineseMarketCalendar()
-    calendar.save_to_database(calendar_type=calendar_type, years_to_update=[year, year+1])
-    # calendar.analyze_calendar()
+    calendar.save_to_database(calendar_type=calendar_type, years_to_update=[year, year + 1])
 
 
 if __name__ == '__main__':
-
     calendar = ChineseMarketCalendar()
 
     # 获取上一个交易日
-    previous_trading_day = calendar.get_previous_trading_day()
+    previous_trading_day = calendar.get_last_trading_day()
     print(f"上一个交易日: {previous_trading_day}")
 
+    # 获取下一个交易日
+    next_trading_day = calendar.get_next_trading_day()
+    print(f"下一个交易日: {next_trading_day}")
+
     # 获取今年的交易日列表
-    trading_days = calendar.get_trading_days_range()
+    trading_days = calendar.get_trading_days_range('20241228','20251227')
+    print(f"指定范围的交易日: {trading_days}")
     print(f"今年交易日数量: {len(trading_days)}")
 
     # 获取今年的交易日数量
@@ -575,3 +367,5 @@ if __name__ == '__main__':
     end_date = datetime.date(2024, 6, 30)
     specific_trading_days = calendar.get_trading_days_range(start_date, end_date)
     print(f"{start_date} 到 {end_date} 的交易日数量: {len(specific_trading_days)}")
+
+    print(calendar.get_trading_calendar())

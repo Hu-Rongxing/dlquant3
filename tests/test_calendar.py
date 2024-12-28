@@ -32,7 +32,7 @@ def test_trading_day_functions():
     logger.info(f"{test_date} 是否为交易日: {is_test_date_trading}")
 
     # 测试获取上一个交易日
-    previous_trading_day = calendar.get_previous_trading_day(today)
+    previous_trading_day = calendar.get_last_trading_day(today)
     logger.info(f"{today} 的上一个交易日: {previous_trading_day}")
 
     # 测试获取指定范围的交易日

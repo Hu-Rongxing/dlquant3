@@ -75,35 +75,25 @@ class PGConnectionPool:
 
     def __init__(self, database: str = 'quant',
                  min_connections: int = 1,
-                 max_connections: int = 10):
-        """
-        初始化连接池
-
-        Args:
-            database (str): 数据库名称
-            min_connections (int): 最小连接数
-            max_connections (int): 最大连接数
-        """
-        self.config = PGConfig(database)
+                 max_connections: int = 10,
+                 timeout: int = 30):
+        # 增加超时和重试机制
+        self.timeout = timeout
         self._pool = None
         self._create_connection_pool(min_connections, max_connections)
 
     def _create_connection_pool(self, min_connections: int, max_connections: int):
-        """
-        创建连接池
-
-        Args:
-            min_connections (int): 最小连接数
-            max_connections (int): 最大连接数
-        """
         try:
+            # 增加连接超时和重试逻辑
             self._pool = pool.SimpleConnectionPool(
                 min_connections,
                 max_connections,
-                **self.config.get_connection_params()
+                **self.config.get_connection_params(),
+                connect_timeout=self.timeout
             )
         except Exception as e:
             applogger.error(f"创建连接池失败: {e}")
+            # 可以考虑实现自动重试机制
             raise
 
     @contextmanager
