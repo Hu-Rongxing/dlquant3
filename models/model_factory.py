@@ -27,6 +27,8 @@ ModelType = Union[
 
 
 class BaseParamStrategy(ABC):
+    model_name:str = None
+    model = None
     """
     参数策略的基类，提供通用的参数管理功能
     """
@@ -382,5 +384,14 @@ class TiDEModelParamStrategy(DeepLearnModelParamStrategy):
             "dropout": trial.suggest_float("dropout", 0.0, 0.3),
         }
         return self.update_params(**params)
+
+
+model_factory_dict = {
+    TiDEModelParamStrategy,
+    TSMixerModelParamStrategy,
+    XGBModelModelParamStrategy,
+    LightGBMModelParamStrategy,
+    TFTModelParamStrategy
+}
 
 
