@@ -7,4 +7,7 @@ test_data_length = 45
 train_data_length = 45
 Initial_buffer_data = 120
 train_scaler_dir = "config/assets/scalers/"
-#covariate_scaler_file = "config/assets/scalers/covariate_data_scaler.pkl"
+
+[models]
+model_path = "models/saved_models"
+visualization_path = "/models/visualization"
