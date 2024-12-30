@@ -5,10 +5,9 @@ import urllib.parse
 from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Dict, Optional, Union, Tuple
 import logging
-
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # 自定义
-from utils.retry import retry
 # 配置日志
 from logger import log_manager
 applogger = log_manager.get_logger(__name__)
@@ -115,7 +114,8 @@ class PGConnectionPool:
             if conn:
                 self._pool.putconn(conn)
 
-    @retry()
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
     def execute_query(self, query: str, params: Optional[Tuple] = None) -> List[Tuple]:
         """
         执行查询
@@ -132,7 +132,8 @@ class PGConnectionPool:
                 cur.execute(query, params)
                 return cur.fetchall()
 
-    @retry()
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
     def execute_insert(self, query: str, data: Union[Dict, List[Dict]]) -> Optional[int]:
         """
         执行插入操作

@@ -7,10 +7,10 @@ import sqlalchemy
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import MetaData, Table, Column, String, BigInteger, DateTime, Float, Date
 import numpy as np
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # 自定义模块
 from logger import log_manager
-from utils.retry import retry
 from .get_securities import get_investment_target
 
 
@@ -24,7 +24,7 @@ COLUMNS_TO_INSERT = [
 ]
 
 
-@retry(max_attempts=3, delay=3, exceptions=(Exception,))
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), reraise=True)
 def download_stock_data(
         stock: str,
         period: str,
