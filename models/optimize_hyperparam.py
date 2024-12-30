@@ -23,7 +23,7 @@ logger = log_manager.get_logger(__name__)
 
 
 class TimeSeriesModelTrainer:
-    def __init__(self, model_params_strategy:BaseParamStrategy):
+    def __init__(self, model_params_strategy: BaseParamStrategy):
         """
         初始化时间序列模型训练器，支持断点续训
 
@@ -38,6 +38,7 @@ class TimeSeriesModelTrainer:
         self.study_path = Path(settings.get('models.model_path')) / self.model_name
         self.study_file = self.study_path / f"optuna_study_{self.model_name}.pkl"
         self.model_params_strategy = model_params_strategy
+        self.best_score = float('-inf')  # 初始化最佳得分为负无穷
 
         # 创建目录
         self.study_file.parent.mkdir(parents=True, exist_ok=True)
@@ -45,7 +46,6 @@ class TimeSeriesModelTrainer:
         self.prepare_data()
         # 初始化模型工厂
         self.model_factory = ModelFactory()
-
 
     def prepare_data(self):
         """
@@ -55,19 +55,19 @@ class TimeSeriesModelTrainer:
         data = data_precessor.generate_processed_series_data()
         # 生成train、test、val
         test_length = settings.get("data.test_data_length", 45)
-        buffer_length = settings.get("data.initial_buffer_data = 120", 120)
-        data['test'] = data['target'][-(test_length + buffer_length) : ]
+        buffer_length = settings.get("data.initial_buffer_data", 120)
+        data['test'] = data['target'][-(test_length + buffer_length):]
         val_length = settings.get("data.val_data_length", 45)
-        data['val'] = data['target'][-(test_length + val_length + buffer_length) : -test_length]
+        data['val'] = data['target'][-(test_length + val_length + buffer_length):-test_length]
         data['train'] = data['target'][:-(test_length + val_length)]
-        data['trian_val'] = data['target'][ : -test_length]
+        data['train_val'] = data['target'][:-test_length]
         self.data = data
 
         return self.data
 
     def _create_study(
             self,
-            direction: str = 'minimize',
+            direction: str = 'maximize',
             load_if_exists: bool = True
     ) -> optuna.Study:
         """
@@ -88,7 +88,7 @@ class TimeSeriesModelTrainer:
                 logger.info(f"成功加载现有研究: {self.study_file}")
                 return study
 
-                # 创建新的研究
+            # 创建新的研究
             study = optuna.create_study(
                 direction=direction,
                 study_name=f"optuna_study_{self.model_name}"
@@ -131,10 +131,17 @@ class TimeSeriesModelTrainer:
 
         try:
             evaluation = train_and_evaluate(model, self.data)
-            return evaluation['precision']
+            current_score = evaluation['precision']
+
+            # 更新最佳得分
+            if current_score > self.best_score:
+                self.best_score = current_score
+                logger.info(f"新的最佳得分: {self.best_score} (Trial {trial.number})")
+
+            return current_score
 
         except Exception as e:
-            print(f"模型训练失败: {e}")
+            logger.error(f"模型训练失败: {e}")
             return float('inf')
 
     @staticmethod
@@ -148,39 +155,36 @@ class TimeSeriesModelTrainer:
         progress_percentage = (completed_trials / total_trials) * 100 if total_trials > 0 else 0
 
         # 打印进度信息
-        print(f"Trial {trial.number}: Progress {progress_percentage:.2f}% "
-              f"(Completed: {completed_trials}/{total_trials})")
+        logger.info(f"Trial {trial.number}: Progress {progress_percentage:.2f}% "  
+                    f"(Completed: {completed_trials}/{total_trials})")
 
         # 可选：打印当前试验的参数和值
         if trial.value is not None:
-            print(f"  Current Value: {trial.value}")
-            print(f"  Current Params: {trial.params}")
-
+            logger.info(f"  Current Value: {trial.value}")
+            logger.info(f"  Current Params: {trial.params}")
 
     def optimize_hyperparameters(
             self,
             n_trials: int = 100,
             timeout: Optional[float] = None,
+            save_interval: int = 3,  # 每10个trials保存一次
             callbacks: Optional[list] = None,
             additional_config: Optional[Dict[str, Any]] = None
     ) -> optuna.Study:
-        """
-        使用 Optuna 进行超参数优化，支持断点续训
+        # 自定义定期保存的回调
+        def periodic_save_callback(study, trial):
+            # 每隔 save_interval 个完成的试验保存一次
+            if trial.number > 0 and trial.number % save_interval == 0:
+                if trial.state == optuna.trial.TrialState.COMPLETE:
+                    try:
+                        self._save_study(study)
+                        logger.info(f"已在第 {trial.number} 个试验处保存研究进度")
+                    except Exception as e:
+                        logger.error(f"定期保存失败: {e}")
 
-        Args:
-            n_trials: 优化试验次数
-            timeout: 超时时间（秒）
-            callbacks: 额外的回调函数
-            additional_config: 额外的配置参数
-
-        Returns:
-            Optuna 研究对象
-        """
         # 默认回调函数
         default_callbacks = [
-            # 定期保存研究
-            optuna.study.MaxTrialsCallback(n_trials, states=(optuna.trial.TrialState.COMPLETE,)),
-            # 打印进度
+            periodic_save_callback,
             self.print_progress_callback
         ]
 
@@ -199,11 +203,8 @@ class TimeSeriesModelTrainer:
                 callbacks=all_callbacks
             )
 
-            # 保存研究结果
+            # 最终保存
             self._save_study(study)
-
-            # 打印最佳结果
-            self._log_best_trial(study)
 
             return study
 
@@ -268,34 +269,35 @@ class TimeSeriesModelTrainer:
             logger.error(f"恢复优化失败: {e}")
             raise
 
-        # 使用示例
 
-
-def main():
+def train_separate_models():
     # 初始化训练器
+    for model_params_strategy in [
+        TiDEModelParamStrategy,
+        TSMixerModelParamStrategy,
+        XGBModelModelParamStrategy,
+        LightGBMModelParamStrategy,
+        TFTModelParamStrategy
+    ]:
+        trainer = TimeSeriesModelTrainer(model_params_strategy=model_params_strategy)
 
-    model_params_strategy = TiDEModelParamStrategy
-    trainer = TimeSeriesModelTrainer(model_params_strategy=model_params_strategy)
-
-    # 第一次运行优化
-    study = trainer.optimize_hyperparameters(
-        n_trials=50,  # 初始试验数
-        # timeout=3600,  # 1小时超时
-        callbacks=[
-            # 可添加自定义回调
-        ]
-    )
-
-    # 意外中断后恢复优化
-    try:
-        # 从上次中断处继续
-        updated_study = trainer.resume_optimization(
-            additional_trials=50,  # 额外的试验数
-            # timeout=1800  # 30分钟超时
+        # 第一次运行优化
+        study = trainer.optimize_hyperparameters(
+            n_trials=50,  # 初始试验数
+            # timeout=3600,  # 1小时超时
+            callbacks=[
+                # 可添加自定义回调
+            ]
         )
-    except Exception as e:
-        logger.error(f"恢复优化失败: {e}")
+
+        # 意外中断后恢复优化
+        try:
+            # 从上次中断处继续
+            updated_study = trainer.resume_optimization(
+                additional_trials=50,  # 额外的试验数
+                # timeout=1800  # 30分钟超时
+            )
+        except Exception as e:
+            logger.error(f"恢复优化失败: {e}")
 
 
-if __name__ == "__main__":
-    main()

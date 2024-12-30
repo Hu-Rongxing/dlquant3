@@ -50,11 +50,12 @@ class CustomSMTPHandler(logging.Handler):
 
         :param record: 日志记录
         """
-        try:
-            msg = self.format(record)
-            self._log_queue.put(msg)
-        except Exception:
-            self.handleError(record)
+        if record.levelno >= TRADER_LEVEL_NUM:
+            try:
+                msg = self.format(record)
+                self._log_queue.put(msg)
+            except Exception:
+                self.handleError(record)
 
     def _background_send_thread(self):
         """
@@ -73,7 +74,7 @@ class CustomSMTPHandler(logging.Handler):
                     self._send_merged_email(logs)
                     self._last_send_time = current_time
 
-                    # 避免过度消耗CPU
+                # 避免过度消耗CPU
                 time.sleep(1)
 
             except Exception as e:
@@ -123,8 +124,6 @@ class CustomSMTPHandler(logging.Handler):
             self._send_thread.join(timeout=5)
         super().close()
 
-    # 使用示例
-
 
 def create_smtp_handler(config: LoggingConfig = None):
     """
@@ -136,7 +135,7 @@ def create_smtp_handler(config: LoggingConfig = None):
     email_handler = CustomSMTPHandler(
         config,
         min_interval=15,  # 最小发送间隔15秒
-        max_log_count=20  # 最多合并10条日志
+        max_log_count=20  # 最多合并20条日志
     )
     email_handler.setFormatter(EnhancedFormatter())
 

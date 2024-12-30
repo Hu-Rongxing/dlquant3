@@ -3,6 +3,10 @@ import os
 import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
+# from logging_manager import setup_logging
+#
+# # 调用日志设置
+# setup_logging()
 
 # 自定义日志级别
 TRADER_LEVEL_NUM = 35

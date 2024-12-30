@@ -1,7 +1,8 @@
 import os
 import logging
 import tempfile
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
+from queue import Queue
 
 from .logging_config import LoggingConfig, TRADER_LEVEL_NUM
 from .logging_formatter import EnhancedFormatter
@@ -27,7 +28,7 @@ class LoggingManager:
         if hasattr(self, '_initialized'):
             return
 
-            # 使用传入配置或创建默认配置
+        # 使用传入配置或创建默认配置
         self.config = config or LoggingConfig()
 
         # 验证配置
@@ -35,8 +36,7 @@ class LoggingManager:
             print("日志配置验证失败，将使用默认配置")
             self.config = LoggingConfig()
 
-            # 动态添加 trader 方法到 Logger
-
+        # 动态添加 trader 方法到 Logger
         def trader(self, message, *args, **kwargs):
             if self.isEnabledFor(TRADER_LEVEL_NUM):
                 self._log(TRADER_LEVEL_NUM, message, args, **kwargs)
@@ -48,7 +48,6 @@ class LoggingManager:
 
         # 标记已初始化
         self._initialized = True
-
 
     def _setup_logging(self):
         """设置日志系统"""
@@ -79,13 +78,16 @@ class LoggingManager:
                 logging.root.addHandler(logging.NullHandler())
                 return
 
-                # 打印日志文件路径（调试用）
+        # 打印日志文件路径（调试用）
         print(f"最终日志文件路径: {log_path}")
+
+        # 创建日志队列
+        self.log_queue = Queue()
 
         # 创建根日志记录器
         logging.root.setLevel(logging.DEBUG)
 
-        # 文件处理器（支持日志轮转）
+        # 创建文件处理器（支持日志轮转）
         file_handler = RotatingFileHandler(
             log_path,
             maxBytes=self.config.max_log_size,
@@ -94,6 +96,9 @@ class LoggingManager:
         )
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(EnhancedFormatter())
+
+        # 创建队列处理器
+        queue_handler = QueueHandler(self.log_queue)
 
         # 控制台处理器
         console_handler = logging.StreamHandler()
@@ -106,10 +111,12 @@ class LoggingManager:
         # 清除现有处理器
         logging.root.handlers.clear()
 
-        # 添加处理器
-        logging.root.addHandler(file_handler)
-        logging.root.addHandler(console_handler)
-        logging.root.addHandler(mail_handler)
+        # 添加队列处理器
+        logging.root.addHandler(queue_handler)
+
+        # 启动队列监听器
+        self.listener = QueueListener(self.log_queue, file_handler, console_handler, mail_handler)
+        self.listener.start()
 
         # 添加邮件处理器（如果配置了）
         try:
@@ -123,9 +130,11 @@ class LoggingManager:
         """获取特定模块的日志记录器"""
         return logging.getLogger(name)
 
-    # 全局日志管理器
+    def stop(self):
+        """停止日志监听器"""
+        self.listener.stop()
 
-
+# 全局日志管理器
 log_manager = LoggingManager()
 
 if __name__ == '__main__':

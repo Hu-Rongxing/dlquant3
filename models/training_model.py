@@ -4,13 +4,10 @@ import darts
 from typing import Dict, List, Any, Optional
 import matplotlib.pyplot as plt
 import matplotlib
-from matplotlib import font_manager
+import logging
 from sklearn.metrics import (
     precision_score,
-    f1_score,
-    mean_squared_error,
-    mean_absolute_error,
-    mean_absolute_percentage_error
+    f1_score
 )
 
 import logger
@@ -20,11 +17,7 @@ logger = log_manager.get_logger(__name__)
 # 配置 Matplotlib 以支持中文显示
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']  # 设置字体为 SimHei（黑体）
 matplotlib.rcParams['axes.unicode_minus'] = False  # 解决坐标轴负号显示问题
-
-# 字体路径配置
-FONT_PATH = 'C:/Windows/Fonts/msyh.ttc'
-font_props = font_manager.FontProperties(fname=FONT_PATH)
-
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 def plot_backtest_data(backtest_data: darts.TimeSeries, title: str = "回测数据") -> None:
     """
@@ -37,8 +30,8 @@ def plot_backtest_data(backtest_data: darts.TimeSeries, title: str = "回测数�
     df = backtest_data.pd_dataframe()
     sample_df = df.sample(n=min(5, df.shape[1]), axis=1, random_state=42)  # 确保不超过列数
     sample_df.plot(lw=2, alpha=0.6)
-    plt.title(title, fontproperties=font_props)
-    plt.legend(prop=font_props, loc='upper left')
+    plt.title(title)
+    plt.legend(loc='upper left')
     plt.show()
     plt.close()
 
@@ -67,15 +60,15 @@ def plot_components_precision(components_precision: dict, overall_precision: flo
     title = "每个组件的精确率"
     if overall_precision is not None:
         title += f"（总体精确率 {overall_precision:.2%}）"
-    plt.title(title, fontproperties=font_props)
+    plt.title(title)
 
     # 设置x轴标签和y轴标签
-    plt.xlabel("组件索引", fontproperties=font_props)
-    plt.ylabel("精确率", fontproperties=font_props)
+    plt.xlabel("组件索引")
+    plt.ylabel("精确率")
     plt.ylim(0, 1)
 
     # 设置x轴刻度位置和标签
-    plt.xticks(ticks=x_positions, labels=indices, rotation=45, fontproperties=font_props)
+    plt.xticks(ticks=x_positions, labels=indices, rotation=45)
 
     # 添加y轴网格线
     plt.grid(axis='y', linestyle='--', alpha=0.7)
@@ -147,7 +140,7 @@ def safe_metric_calculation(
         return default_value
 
 
-def train_and_evaluate(model, data, config: Optional[Dict[str, Any]] = None
+def train_and_evaluate(model, data, config: Optional[Dict[str, Any]] = None, test: bool=True
 ) -> Dict[str, float]:
     """
     高级模型训练和评估函数
@@ -183,14 +176,24 @@ def train_and_evaluate(model, data, config: Optional[Dict[str, Any]] = None
 
         # 模型训练
         try:
-            model.fit(
-                series=data['train'],
-                past_covariates=data['past_covariates'],
-                future_covariates=data['future_covariates'],
-                val_series=data['val'],
-                val_past_covariates=data['past_covariates'],
-                val_future_covariates=data['future_covariates'],
-            )
+            if test:
+                model.fit(
+                    series=data['train'],
+                    past_covariates=data['past_covariates'],
+                    future_covariates=data['future_covariates'],
+                    val_series=data['val'],
+                    val_past_covariates=data['past_covariates'],
+                    val_future_covariates=data['future_covariates'],
+                )
+            else:
+                model.fit(
+                    series=data['train_val'],
+                    past_covariates=data['past_covariates'],
+                    future_covariates=data['future_covariates'],
+                    val_series=data['test'],
+                    val_past_covariates=data['past_covariates'],
+                    val_future_covariates=data['future_covariates'],
+                )
         except Exception as train_error:
             logger.error(f"模型训练失败: {train_error}")
             raise ModelEvaluationError(f"模型训练异常: {train_error}")
