@@ -88,22 +88,31 @@ class ModelDeployment:
             logger.error(f"模型保存失败: {e}")
 
 
-def main():
-    # 选择模型参数策略
-    model_params_strategy = TiDEModelParamStrategy  # 选择您需要的模型策略
+def train_final_model():
 
-    # 初始化模型部署
-    deployment = ModelDeployment(model_params_strategy)
+    strategy_list = [
+        TiDEModelParamStrategy,
+        TSMixerModelParamStrategy,
+        XGBModelModelParamStrategy,
+        LightGBMModelParamStrategy,
+        TFTModelParamStrategy,
+    ]
 
-    # 加载最佳模型
-    model = deployment.load_best_model()
+        # 选择模型参数策略
+    for model_params_strategy in strategy_list:
 
-    # 再训练模型
-    deployment.retrain_model(model)
+        # 初始化模型部署
+        deployment = ModelDeployment(model_params_strategy)
 
-    # 保存最终模型
-    deployment.save_model(model)
+        # 加载最佳模型
+        model = deployment.load_best_model()
+
+        # 再训练模型
+        deployment.retrain_model(model)
+
+        # 保存最终模型
+        deployment.save_model(model)
 
 
 if __name__ == "__main__":
-    main()
+    train_final_model()
