@@ -1,7 +1,6 @@
 import torch
-import numpy as np
 import darts
-from typing import Dict, List, Any, Optional
+from typing import Dict,Any, Optional
 import matplotlib.pyplot as plt
 import matplotlib
 import logging
@@ -9,15 +8,16 @@ from sklearn.metrics import (
     precision_score,
     f1_score
 )
-
-import logger
+# 自定义
 from logger import log_manager
+from utils.gup_manage import GPUMemoryManager
 
 logger = log_manager.get_logger(__name__)
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 # 配置 Matplotlib 以支持中文显示
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']  # 设置字体为 SimHei（黑体）
 matplotlib.rcParams['axes.unicode_minus'] = False  # 解决坐标轴负号显示问题
-logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
 
 def plot_backtest_data(backtest_data: darts.TimeSeries, title: str = "回测数据") -> None:
     """
@@ -83,34 +83,6 @@ def plot_components_precision(components_precision: dict, overall_precision: flo
 class ModelEvaluationError(Exception):
     """自定义模型评估异常"""
     pass
-
-
-class GPUMemoryManager:
-    """GPU内存管理器"""
-
-    @staticmethod
-    def clear_memory():
-        """清理GPU内存"""
-        try:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-        except Exception as e:
-            logger.warning(f"GPU内存清理失败: {e}")
-
-    @staticmethod
-    def get_gpu_memory_info():
-        """获取GPU内存使用情况"""
-        if not torch.cuda.is_available():
-            return "No GPU available"
-
-        try:
-            allocated = torch.cuda.memory_allocated() / 1024 / 1024  # MB
-            cached = torch.cuda.memory_reserved() / 1024 / 1024  # MB
-            return f"GPU Allocated: {allocated:.2f} MB, Cached: {cached:.2f} MB"
-        except Exception as e:
-            logger.warning(f"获取GPU内存信息失败: {e}")
-            return "GPU memory info unavailable"
 
 
 def safe_metric_calculation(
@@ -300,6 +272,7 @@ def _calculate_components_precision(
     components_precision = {}
     for component_idx in pred_data.components:
         try:
+            # logger.info(true_data[component_idx].values())
             component_true_labels = (
                     true_data[component_idx].values().flatten() > threshold
             ).astype(int)
@@ -313,7 +286,7 @@ def _calculate_components_precision(
                 component_pred_labels,
                 zero_division=0
             )
-
+            logger.info(f"{component_idx}: {component_precision}")
             if component_precision > 0:
                 components_precision[component_idx] = component_precision
 

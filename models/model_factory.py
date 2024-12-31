@@ -46,7 +46,8 @@ class BaseParamStrategy(ABC):
 
     def generate_common_params(self, params_dict: Dict[str, Any]) -> Dict[str, Any]:
         """生成通用参数"""
-        return params_dict
+        self.params.update(params_dict)
+        return self.params
 
     def log_error(self, message: str) -> None:
         """统一的错误日志记录方法"""

@@ -1,4 +1,3 @@
-import os
 import sys
 import time
 import signal
@@ -8,7 +7,6 @@ from typing import List, Callable
 import logging
 import traceback
 import psutil
-from datetime import datetime
 from dataclasses import dataclass
 
 from logger import log_manager
@@ -242,6 +240,9 @@ from utils.set_system import change_language
 from qmt_client import monitor_xt_client, generate_trading_report
 from data_processing.sync_stock_data import sync_stock_data_main
 from data_processing.source_trading_calendar import update_calendar
+from models.Ensemb_model import run_ensemble_training
+from models.deploy_model import buying_strategy
+from qmt_client.qmt_trader import cancel_all_order_async
 
 # 任务配置  
 tasks = [
@@ -249,7 +250,8 @@ tasks = [
         func=change_language,
         cron_expression="08:00,09:00,10:00,11:00,13:00,14:00",
         task_id="change_language",
-        description="切换输入法为英文。"
+        description="切换输入法为英文。",
+        check_trading_day=True,
     ),
     TaskConfig(
         func=monitor_xt_client,
@@ -262,14 +264,39 @@ tasks = [
         func=generate_trading_report,
         cron_expression="09:00,11:35,15:05",
         task_id="generate_trading_report",
-        description="生成交易报告。"
+        description="生成交易报告。",
+        check_trading_day=True
     ),
     TaskConfig(
         func=sync_stock_data_main,
         cron_expression="08:00,12:00,16:00",
         task_id="sync_stock_data_main",
-        description="下载并同步股票数据到数据库。"
-    )
+        description="下载并同步股票数据到数据库。",
+        check_trading_day=True
+    ),
+    TaskConfig(
+        func=run_ensemble_training,
+        cron_expression="08:10",
+        task_id="run_ensemble_training",
+        description="训练集成模型。",
+        check_trading_day=True
+    ),
+    TaskConfig(
+        func=buying_strategy,
+        cron_expression="12:57",
+        task_id="buying_strategy",
+        description="买入策略。",
+        run_in_separate_process=True,
+        check_trading_day=True
+    ),
+    TaskConfig(
+        func=cancel_all_order_async(),
+        cron_expression="09:25",
+        task_id="cancel_all_order_async",
+        description="取消未成交订单。",
+        run_in_separate_process=False,
+        check_trading_day=True
+    ),
 ]
 
 # 主入口  

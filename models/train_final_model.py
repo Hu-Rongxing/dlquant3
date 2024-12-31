@@ -1,6 +1,7 @@
 import joblib
 from pathlib import Path
-from .training_model import train_and_evaluate
+# 自定义
+from .train_functions import train_and_evaluate
 from .model_factory import (
     ModelFactory,
     TiDEModelParamStrategy,
@@ -11,6 +12,7 @@ from .model_factory import (
     BaseParamStrategy
 )
 from data_processing.generate_training_data import TimeSeriesProcessor
+from utils.darts_models import load_darts_model, save_darts_model
 from config import settings
 from logger import log_manager
 
@@ -24,6 +26,8 @@ class ModelDeployment:
         self.study_file = self.study_path / f"optuna_study_{self.model_name}.pkl"
         self.model_factory = ModelFactory()
         self.data = None
+
+        self.model_factory.register_param_strategy(model_params_strategy)
 
     def load_best_model(self):
         """
@@ -47,17 +51,8 @@ class ModelDeployment:
         """
         数据准备和预处理
         """
-        data_precessor = TimeSeriesProcessor()
-        data = data_precessor.generate_processed_series_data()
-        # 生成train、test、val
-        test_length = settings.get("data.test_data_length", 45)
-        buffer_length = settings.get("data.initial_buffer_data", 120)
-        data['test'] = data['target'][-(test_length + buffer_length):]
-        val_length = settings.get("data.val_data_length", 45)
-        data['val'] = data['target'][-(test_length + val_length + buffer_length):-test_length]
-        data['train'] = data['target'][:-(test_length + val_length)]
-        data['train_val'] = data['target'][:-test_length]
-        self.data = data
+        data_processor = TimeSeriesProcessor()
+        self.data = data_processor.generate_processed_series_data()
         logger.info("数据准备完成。")
         return self.data
 
@@ -81,11 +76,7 @@ class ModelDeployment:
         保存训练好的模型
         """
         model_path = self.study_path / f"{self.model_name}_final_model.pkl"
-        try:
-            joblib.dump(model, model_path)
-            logger.info(f"模型已保存到: {model_path}")
-        except Exception as e:
-            logger.error(f"模型保存失败: {e}")
+        save_darts_model(model, model_path.resolve())
 
 
 def train_final_model():
@@ -93,9 +84,9 @@ def train_final_model():
     strategy_list = [
         TiDEModelParamStrategy,
         TSMixerModelParamStrategy,
-        XGBModelModelParamStrategy,
-        LightGBMModelParamStrategy,
-        TFTModelParamStrategy,
+        # XGBModelModelParamStrategy,
+        # LightGBMModelParamStrategy,
+        # TFTModelParamStrategy,
     ]
 
         # 选择模型参数策略

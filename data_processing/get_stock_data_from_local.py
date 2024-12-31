@@ -123,6 +123,7 @@ class DataProcessor:
         """
         # 处理数据
         data_cleaned, date_to_int_series = cls.process_dataframe(count=count)
+        logger.trader(f"下载数据的最新日期{data_cleaned['date'].max()}")
 
         # 创建目标变量数据框
         target_df = data_cleaned.pivot_table(

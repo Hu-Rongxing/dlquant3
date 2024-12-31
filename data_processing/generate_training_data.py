@@ -270,7 +270,7 @@ class TimeSeriesProcessor:
                 future_encoded_features
             ).astype(np.float32)
 
-            return {
+            data =  {
                 "target": target_scaled,
                 "past_covariates": covariates_scaled,
                 "future_covariates": future_covariate_series,
@@ -278,6 +278,16 @@ class TimeSeriesProcessor:
                 "scaler_past": past_cov_scaler,
                 "final_date_series": final_series  # 可选：返回最终的日期序列
             }
+            # 生成train、test、val
+            test_length = settings.get("data.test_data_length", 45)
+            buffer_length = settings.get("data.initial_buffer_data", 120)
+            data['test'] = data['target'][-(test_length + buffer_length):]
+            val_length = settings.get("data.val_data_length", 45)
+            data['val'] = data['target'][-(test_length + val_length + buffer_length):-test_length]
+            data['train'] = data['target'][:-(test_length + val_length)]
+            data['train_val'] = data['target'][:-test_length]
+
+            return data
 
         except Exception as e:
             logger.error(f"处理时间序列数据时发生错误: {e}")

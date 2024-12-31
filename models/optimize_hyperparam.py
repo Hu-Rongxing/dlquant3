@@ -15,7 +15,7 @@ from .model_factory import (
     BaseParamStrategy
 )
 from data_processing.generate_training_data import TimeSeriesProcessor
-from .training_model import train_and_evaluate
+from .train_functions import train_and_evaluate
 from config import settings
 from logger import log_manager
 
@@ -51,18 +51,8 @@ class TimeSeriesModelTrainer:
         """
         数据准备和预处理
         """
-        data_precessor = TimeSeriesProcessor()
-        data = data_precessor.generate_processed_series_data()
-        # 生成train、test、val
-        test_length = settings.get("data.test_data_length", 45)
-        buffer_length = settings.get("data.initial_buffer_data", 120)
-        data['test'] = data['target'][-(test_length + buffer_length):]
-        val_length = settings.get("data.val_data_length", 45)
-        data['val'] = data['target'][-(test_length + val_length + buffer_length):-test_length]
-        data['train'] = data['target'][:-(test_length + val_length)]
-        data['train_val'] = data['target'][:-test_length]
-        self.data = data
-
+        data_processor = TimeSeriesProcessor()
+        self.data = data_processor.generate_processed_series_data()
         return self.data
 
     def _create_study(
