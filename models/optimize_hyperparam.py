@@ -20,7 +20,8 @@ from config import settings
 from logger import log_manager
 
 logger = log_manager.get_logger(__name__)
-
+# 设置 LOKY_MAX_CPU_COUNT 为您希望使用的核心数量
+os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 例如，设置为 4
 
 class TimeSeriesModelTrainer:
     def __init__(self, model_params_strategy: BaseParamStrategy):
@@ -260,13 +261,13 @@ class TimeSeriesModelTrainer:
             raise
 
 
-def train_separate_models():
+def optimize_hyperparam_for_models():
     # 初始化训练器
     for model_params_strategy in [
-        TiDEModelParamStrategy,
-        TSMixerModelParamStrategy,
-        XGBModelModelParamStrategy,
-        LightGBMModelParamStrategy,
+        # TiDEModelParamStrategy,
+        # TSMixerModelParamStrategy,
+        # XGBModelModelParamStrategy,
+        # LightGBMModelParamStrategy,
         TFTModelParamStrategy
     ]:
         trainer = TimeSeriesModelTrainer(model_params_strategy=model_params_strategy)

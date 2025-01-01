@@ -1,5 +1,6 @@
 import joblib
 from pathlib import Path
+import os
 # 自定义
 from .train_functions import train_and_evaluate
 from .model_factory import (
@@ -17,6 +18,7 @@ from config import settings
 from logger import log_manager
 
 logger = log_manager.get_logger(__name__)
+os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 例如，设置为 4
 
 
 class ModelDeployment:
@@ -84,8 +86,8 @@ def train_final_model():
     strategy_list = [
         TiDEModelParamStrategy,
         TSMixerModelParamStrategy,
-        # XGBModelModelParamStrategy,
-        # LightGBMModelParamStrategy,
+        XGBModelModelParamStrategy,
+        LightGBMModelParamStrategy,
         # TFTModelParamStrategy,
     ]
 

@@ -24,6 +24,9 @@ ModelType = Union[
 ]
 
 class BaseParamStrategy(ABC):
+    """
+    添加所有darts模型公用的参数。
+    """
     model_name: str = None
     model = None
 
@@ -113,12 +116,14 @@ class ModelFactory:
 
 
 class MachineModelParamStrategy(BaseParamStrategy):
+    """
+    添加机器学习模型共用的参数
+    """
     def __init__(self):
         """初始化机器学习模型参数策略"""
         super().__init__()
         self.params = self.update_params(
-            verbose=-1,
-            early_stopping_rounds=5
+            early_stopping_rounds=10
         )
 
 
@@ -147,7 +152,11 @@ class LightGBMModelParamStrategy(MachineModelParamStrategy):
     def generate_common_params(self, params_dict: Dict[str, Any]) -> Dict[str, Any]:
         """为通用模式生成LightGBM模型参数"""
         future_past = params_dict.pop("future_past", 1)  # 获取未来协变量的滞后步数
-        params_dict.update({"lags_future_covariates": (future_past, 1)})  # 更新参数字典
+        params_dict.pop('verbose')
+        params_dict.update({
+            "lags_future_covariates": (future_past, 1),
+            # "verbose": -1,
+        })  # 更新参数字典
         return self.update_params(**params_dict)
 
 
@@ -181,6 +190,9 @@ class XGBModelModelParamStrategy(MachineModelParamStrategy):
 
 
 class DeepLearnModelParamStrategy(BaseParamStrategy):
+    """
+    添加深度学习模型公用的参数
+    """
     def __init__(self):
         """初始化深度学习模型参数策略"""
         super().__init__()

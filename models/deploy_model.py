@@ -1,5 +1,6 @@
 from pathlib import Path
 from tenacity import retry, stop_after_attempt, wait_fixed
+import os
 from config import settings
 from logger import log_manager
 from utils.darts_models import load_darts_model
@@ -7,6 +8,7 @@ from data_processing.generate_training_data import TimeSeriesProcessor
 from qmt_client.qmt_trader import buy_stock_async
 
 logger = log_manager.get_logger(__name__)
+os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 例如，设置为 4
 
 def predict_market_by_ensemble_model():
     model_name = "RegressionEnsembleModel"

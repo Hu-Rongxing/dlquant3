@@ -45,7 +45,7 @@ def load_darts_model(model_name: str, model_path: str):
         darts_model_class = getattr(module, model_name)  # 获取类  
     except AttributeError:  
         logger.error(f"模块 'darts.models' 中没有找到类 '{model_name}'")  
-        raise  
+        raise
 
     # 尝试加载模型参数  
     try:  
@@ -59,6 +59,6 @@ def load_darts_model(model_name: str, model_path: str):
         raise  
 
     # 动态为模型对象添加 `model_name` 属性，以便后续使用  
-    setattr(model_instance, "model_name", model_name)  
+    setattr(model_instance, "model_name", model_name)
 
     return model_instance  # 返回加载的模型对象
