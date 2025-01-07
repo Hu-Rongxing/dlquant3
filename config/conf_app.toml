@@ -4,7 +4,7 @@
 [logging]
 log_level = "DEBUG"
 log_dir = "logger/logs"
-log_file = "applog.log"
+log_file = "applog.txt"
 
 # 单元测试用
 [testtoml]

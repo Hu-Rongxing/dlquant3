@@ -11,3 +11,6 @@ train_scaler_dir = "config/assets/scalers/"
 [models]
 model_path = "models/saved_models"
 visualization_path = "/models/visualization"
+
+[stop_loss]
+max_profit_path = "config/assets/stop_loss/max_profit.pkl"

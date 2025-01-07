@@ -7,6 +7,7 @@ from sqlalchemy import text
 # 自定义模块
 from logger import log_manager
 from utils.database import create_sqlalchemy_engine
+from utils.date_utils import convert_to_date
 from .source_stock_data import (
     get_data_from_local,
     preprocess_market_data,
@@ -90,7 +91,7 @@ class StockDataSyncManager:
 
                 if last_sync_date:
                     # 转换为日期并计算同步起始日期
-                    start_date = datetime.strptime(last_sync_date, '%Y%m%d')
+                    start_date = convert_to_date(last_sync_date,)
                     start_time = (start_date - timedelta(days=7)).strftime('%Y%m%d')  # 额外同步7天防止数据遗漏
                     incrementally = True
                 else:

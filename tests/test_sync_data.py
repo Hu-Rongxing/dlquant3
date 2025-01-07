@@ -3,4 +3,4 @@ from utils.timing import timeit
 
 @timeit()
 def test_sync_stock_data():
-    sync_stock_data_main(force_full_sync=True)
+    sync_stock_data_main(force_full_sync=False)

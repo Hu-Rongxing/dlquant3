@@ -84,11 +84,11 @@ class ModelDeployment:
 def train_final_model():
 
     strategy_list = [
+        TFTModelParamStrategy,
         TiDEModelParamStrategy,
         TSMixerModelParamStrategy,
         XGBModelModelParamStrategy,
         LightGBMModelParamStrategy,
-        # TFTModelParamStrategy,
     ]
 
         # 选择模型参数策略

@@ -15,6 +15,7 @@ from utils.gup_manage import GPUMemoryManager
 logger = log_manager.get_logger(__name__)
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 # 配置 Matplotlib 以支持中文显示
+plt.ion()
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']  # 设置字体为 SimHei（黑体）
 matplotlib.rcParams['axes.unicode_minus'] = False  # 解决坐标轴负号显示问题
 

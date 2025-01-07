@@ -10,25 +10,8 @@ import psutil
 from dataclasses import dataclass
 
 from logger import log_manager
+from utils.others import is_trading_day
 logger = log_manager.get_logger(__name__)
-
-
-# 交易日检查
-def is_trading_day() -> bool:
-    """  
-    检查是否为交易日  
-
-    Returns:  
-        bool: 是否为交易日  
-    """
-    try:
-        from data_processing.source_trading_calendar import ChineseMarketCalendar
-        return ChineseMarketCalendar().is_trading_day()
-    except ImportError:
-        # 如果导入失败，默认返回 True  
-        return True
-
-    # 任务配置类
 
 
 @dataclass
@@ -161,6 +144,7 @@ class TaskExecutor:
         for task in tasks:
             # 解析时间点  
             for time_point in task.cron_expression.split(','):
+                time_point = time_point.strip()
                 if task.run_in_separate_process:
                     # 独立进程任务  
                     schedule.every().day.at(time_point).do(
@@ -235,14 +219,29 @@ def main(tasks: List[TaskConfig]):
 
     # 导入具体任务函数
 
-
+# ==============================
 from utils.set_system import change_language
 from qmt_client import monitor_xt_client, generate_trading_report
 from data_processing.sync_stock_data import sync_stock_data_main
 from data_processing.source_trading_calendar import update_calendar
+from data_processing.sync_stock_data import get_data_from_local
 from models.Ensemb_model import run_ensemble_training
 from models.deploy_model import buying_strategy
-from qmt_client.qmt_trader import cancel_all_order_async
+from qmt_client.qmt_trader import cancel_all_order_async, restart_xt_client
+from models.train_final_model import train_final_model
+from stop_loss.stop_loss_strategy import stop_loss_main
+
+
+def down_full_data():
+    get_data_from_local(incrementally=True)
+
+def train_trading_model():
+    """
+    训练单个模型和集成模型。
+    :return:
+    """
+    train_final_model()
+    run_ensemble_training()
 
 # 任务配置  
 tasks = [
@@ -275,33 +274,45 @@ tasks = [
         check_trading_day=True
     ),
     TaskConfig(
-        func=run_ensemble_training,
-        cron_expression="08:10",
+        func=train_trading_model,
+        cron_expression="16:00",
         task_id="run_ensemble_training",
         description="训练集成模型。",
-        check_trading_day=True
+        check_trading_day=True,
+        run_in_separate_process=True
     ),
     TaskConfig(
         func=buying_strategy,
-        cron_expression="12:57",
+        cron_expression="14:57",
         task_id="buying_strategy",
         description="买入策略。",
         run_in_separate_process=True,
         check_trading_day=True
     ),
     TaskConfig(
-        func=cancel_all_order_async(),
-        cron_expression="09:25",
+        func=cancel_all_order_async,
+        cron_expression="09:00,14:56",
         task_id="cancel_all_order_async",
         description="取消未成交订单。",
         run_in_separate_process=False,
         check_trading_day=True
     ),
+    TaskConfig(
+        func=stop_loss_main,
+        cron_expression="09:30,09:40,09:50,10:00,10:10,10:20,10:30,10:40,10:50,11:00,11:10,11:20,11:30,13:00,13:10,13:20,13:30,13:40,13:50,14:00,14:10,14:20,14:30,14:40,14:50",
+        task_id="stop_loss_main",
+        description="止损策略。",
+        run_in_separate_process=True,
+        check_trading_day=True
+    )
+
 ]
 
 # 主入口  
 if __name__ == '__main__':
     # 设置多进程启动方法（Windows兼容）
+    # 重启客户端
+    restart_xt_client()
     # 更新日期
     update_calendar()
     # 切换输入法

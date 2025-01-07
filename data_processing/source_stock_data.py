@@ -12,6 +12,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 # 自定义模块
 from logger import log_manager
 from .get_securities import get_investment_target
+from qmt_client import restart_xt_client
 
 
 applogger = log_manager.get_logger(__name__)
@@ -38,6 +39,7 @@ def download_stock_data(
         applogger.info(f"成功下载股票数据：{stock}")
         return True
     except Exception as e:
+        restart_xt_client()
         applogger.exception(f"下载股票数据失败：{stock}，错误信息：{e}")
         raise
 
@@ -57,33 +59,15 @@ def download_history_data(
     start_time = start_time or '20160101'
     end_time = end_time or datetime.now().strftime('%Y%m%d')
 
-    success = True
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # 使用 dict 推导式简化代码
-        futures = {
-            executor.submit(download_stock_data, stock, period, start_time, end_time, incrementally): stock
-            for stock in stock_list
-        }
+    for stock in stock_list:
+        try:
+            download_stock_data(stock, period, start_time, end_time, incrementally)
+        except Exception as e:
+            applogger.error(f"下载股票数据异常：{stock}，错误：{e}")
+            restart_xt_client()
+            raise e
 
-        # 使用生成器表达式优化内存
-        results = (
-            (futures[future], future.result())
-            for future in as_completed(futures)
-        )
-
-        for stock, result in results:
-            try:
-                if callback:
-                    callback(stock, result)
-                if not result:
-                    success = False
-            except Exception as e:
-                applogger.error(f"下载股票数据异常：{stock}，错误：{e}")
-                if callback:
-                    callback(stock, False)
-                success = False
-
-    return success
+    return True
 
 
 def preprocess_market_data(
@@ -225,7 +209,7 @@ def get_data_from_local(
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         stock_list: Optional[List[str]] = None,
-        incrementally: bool = False,
+        incrementally: bool = True,
         columns_mapping: Optional[Dict[str, str]] = None,
         max_workers: int = 10,
         count = -1
@@ -247,11 +231,18 @@ def get_data_from_local(
         if not stock_list:
             stock_list = get_investment_target().securities.to_list()
 
+        if not start_time:
+            current_date = datetime.now()
+            # 减去6年
+            date_six_years_ago = current_date.replace(year=current_date.year - 6)
+            # 格式化为yyyymmdd
+            start_time = date_six_years_ago.strftime('%Y%m%d')
+
             # 下载数据
         download_history_data(
             stock_list=stock_list,
             period=period,
-            start_time=start_time or '20160101',
+            start_time=start_time,
             end_time=end_time or datetime.now().strftime('%Y%m%d'),
             incrementally=incrementally,
             max_workers=max_workers

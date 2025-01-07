@@ -9,6 +9,7 @@ from sklearn.metrics import (
 from sklearn.linear_model import Ridge
 import os
 import matplotlib
+import matplotlib.pyplot as plt
 from pathlib import Path
 
 # 自定义
@@ -29,6 +30,7 @@ from utils.gup_manage import GPUMemoryManager
 from config import settings
 
 logger = log_manager.get_logger(__name__)
+plt.ion()
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']  # 设置字体为黑体
 matplotlib.rcParams['axes.unicode_minus'] = False  # 解决坐标轴负号显示问题
 os.environ["LOKY_MAX_CPU_COUNT"] = "12"  # 例如，设置为 4
@@ -86,7 +88,7 @@ def train_and_evaluate_ensemble(data: dict, strategies: list):
         # 创建并配置集成模型
     ensemble_model = RegressionEnsembleModel(
         forecasting_models=models,
-        regression_train_n_points=225,  # 使用整个序列
+        regression_train_n_points=600,  # 使用整个序列
         regression_model=ridge_model,
         train_using_historical_forecasts=True,
         train_forecasting_models=False   # 使用预训练模型，不用重复训练。
@@ -103,12 +105,14 @@ def train_and_evaluate_ensemble(data: dict, strategies: list):
     )
 
     # 评估模型
-    evaluation_model(data, ensemble_model)
+    evaluation_results = evaluation_model(data, ensemble_model)
 
     GPUMemoryManager().clear_memory()
     ensemble_path = Path(
         settings.get('models.model_path')) / f"{ensemble_model_name}/{ensemble_model_name}_final_model.pkl"
     save_darts_model(ensemble_model, ensemble_path.as_posix())
+
+    logger.trader(f"完成集成模型训练，回测精度确率：{evaluation_results['precision']:.2%}; F1得分{evaluation_results['f1_score']:.2%}")
 
     return ensemble_model
 
@@ -157,7 +161,8 @@ def evaluation_model(data, model):
         threshold=0
     )
     logger.info(f"模型「{model.model_name}」")
-    logger.info(components_precision)
+    logger.info(evaluation_results)
+    return evaluation_results
 
 
 def run_ensemble_training(mode='training') -> tuple:
@@ -182,7 +187,7 @@ def run_ensemble_training(mode='training') -> tuple:
         TiDEModelParamStrategy,
         TSMixerModelParamStrategy,
         XGBModelModelParamStrategy,
-        # TFTModelParamStrategy,
+        TFTModelParamStrategy,
     ]
 
     try:

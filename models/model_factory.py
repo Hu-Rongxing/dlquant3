@@ -152,7 +152,8 @@ class LightGBMModelParamStrategy(MachineModelParamStrategy):
     def generate_common_params(self, params_dict: Dict[str, Any]) -> Dict[str, Any]:
         """为通用模式生成LightGBM模型参数"""
         future_past = params_dict.pop("future_past", 1)  # 获取未来协变量的滞后步数
-        params_dict.pop('verbose')
+        if 'verbose' in params_dict:
+            params_dict.pop('verbose')
         params_dict.update({
             "lags_future_covariates": (future_past, 1),
             # "verbose": -1,

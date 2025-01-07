@@ -10,15 +10,18 @@ def test_log_config():
 
 
 def test_logging():
+    import time
     logger = log_manager.get_logger(__name__)
     # 多级别日志测试
-    print("当前工作目录:", os.getcwd())
+    for i in range(10):
+        print("当前工作目录:", os.getcwd())
 
-    logger.debug("这是一个调试信息")
-    logger.info("这是一个普通信息")
-    logger.warning("这是一个警告")
-    logger.error("这是一个错误")
-    logger.trader("这是一个交易日志")
+        logger.debug("这是一个调试信息")
+        logger.info("这是一个普通信息")
+        logger.warning("这是一个警告")
+        logger.error("这是一个错误")
+        logger.trader("这是一个交易日志")
+        time.sleep(2)
 
     # 检查日志文件
     log_path = os.path.abspath(
