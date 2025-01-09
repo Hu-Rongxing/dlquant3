@@ -45,35 +45,47 @@ class LoggingManager:
         log_dir = os.path.abspath(self.config.log_dir)
         os.makedirs(log_dir, exist_ok=True)
 
-        # 生成以日期命名的日志文件
-        log_file_name = f"{datetime.date.today()}.log"
-        log_path = os.path.join(log_dir, log_file_name)
+        # 使用 Midnight Rotating File Handler
+        def make_log_file_path():
+            return os.path.join(log_dir, f"{datetime.date.today()}.log")
 
-        # 创建日志文件处理器，按天轮转
-        try:
-            file_handler = TimedRotatingFileHandler(
-                log_path,
-                when='midnight',  # 每天午夜轮转
-                interval=1,       # 每天轮转一次
-                backupCount=15,   # 保留15天的日志
-                encoding='utf-8'
-            )
-            file_handler.setLevel(logging.DEBUG)
-            file_handler.setFormatter(EnhancedFormatter())
-        except PermissionError:
-            # 处理权限错误，生成随机数后缀的日志文件
-            random_suffix = random.randint(1000, 9999)
-            error_log_path = os.path.join(log_dir, f"{datetime.date.today()}_{random_suffix}.log")
-            file_handler = TimedRotatingFileHandler(
-                error_log_path,
-                when='midnight',
-                interval=1,
-                backupCount=15,
-                encoding='utf-8'
-            )
-            file_handler.setLevel(logging.DEBUG)
-            file_handler.setFormatter(EnhancedFormatter())
-            print(f"权限错误，已切换到临时日志文件: {error_log_path}")
+        class MidnightRotatingFileHandler(TimedRotatingFileHandler):
+            def __init__(self, filename, **kwargs):
+                super().__init__(filename, **kwargs)
+                self.make_log_file_path = make_log_file_path
+
+            def computeRollover(self, currentTime):
+                return super().computeRollover(currentTime)
+
+            def doRollover(self):
+                # 确保在午夜准确创建新文件
+                if self.stream:
+                    self.stream.close()
+                    self.stream = None
+
+                    # 生成新的日志文件路径
+                new_log_path = self.make_log_file_path()
+                self.baseFilename = new_log_path
+
+                # 重新打开文件流
+                self.stream = self._open()
+
+                # 处理备份文件
+                if self.backupCount > 0:
+                    for s, _ in self.getFilesToDelete():
+                        os.remove(s)
+
+                        # 创建文件处理器
+
+        file_handler = MidnightRotatingFileHandler(
+            make_log_file_path(),
+            when='midnight',
+            interval=1,
+            backupCount=15,
+            encoding='utf-8'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(EnhancedFormatter())
 
         # 创建日志队列
         self.log_queue = Queue()

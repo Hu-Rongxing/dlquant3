@@ -198,7 +198,7 @@ def main(tasks: List[TaskConfig]):
         # 调度任务  
         executor.schedule_tasks(tasks)
 
-        logger.info("任务调度器已启动")
+        logger.trader("任务调度器已启动")
 
         # 信号处理  
         def signal_handler(signum, frame):

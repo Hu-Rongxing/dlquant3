@@ -253,7 +253,7 @@ def get_data_from_local(
             field_list=[],
             stock_list=stock_list,
             period=period,
-            start_time=start_time or '20160101',
+            start_time=start_time,
             end_time=end_time or datetime.now().strftime('%Y%m%d'),
             count=count,
             dividend_type='front',
