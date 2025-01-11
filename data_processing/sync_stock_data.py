@@ -192,6 +192,7 @@ def sync_stock_data_main(force_full_sync=False):
         logger.info("\n同步后状态：")
         for key, value in updated_sync_status.items():
             logger.info(f"{key}: {value}")
+        logger.trader(f"数据同步已完成。")
 
     except Exception as e:
         logger.exception(f"主程序执行失败：{e}")

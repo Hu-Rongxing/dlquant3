@@ -141,6 +141,8 @@ def get_max_ask_price(stock_code: str) -> Optional[float]:
             else:
                 applogger.warning(f"{stock_code}涨停价异常")
 
+            applogger.info(f"股票【{stock_code}】的最高价格: {max_ask_price}")
+
             # 返回最高卖价
             return max_ask_price
         else:
@@ -214,7 +216,7 @@ def buy_stock_async(stocks: List[str], strategy_name: str = '', order_remark: st
             status_message = {
                 999999: f"股票已涨停: {stock_code}",
                 999998: f"当前合约不可交易: {stock_code}"
-            }.get(max_ask_price, "")
+            }.get(max_ask_price, "max_ask_price异常")
             applogger.warning(status_message)
             continue
 
